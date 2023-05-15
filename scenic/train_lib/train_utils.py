@@ -1,4 +1,4 @@
-# Copyright 2022 The Scenic Authors.
+# Copyright 2023 The Scenic Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,13 +20,14 @@ import functools
 import os
 import re
 import time
-from typing import Any, Callable, Dict, Tuple, Sequence, Optional, Mapping, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 from absl import logging
 from clu import metric_writers
 import flax
 from flax import jax_utils
 from flax import struct
+from flax.core import pop
 import flax.linen as nn
 from flax.training import checkpoints
 import jax
@@ -57,9 +58,9 @@ class TrainState:
   tx: Optional[optax.GradientTransformation] = struct.field(
       default=None, pytree_node=False)
   opt_state: Optional[optax.OptState] = None
-  params: Optional[Any] = None
+  params: Optional[Any] = struct.field(default_factory=dict)
   global_step: Optional[int] = 0
-  model_state: Optional[Any] = None
+  model_state: Optional[Any] = struct.field(default_factory=dict)
   rng: Optional[jnp.ndarray] = None
   metadata: Optional[Dict[str, Any]] = None
 
@@ -78,10 +79,13 @@ class TrainState:
 def initialize_model(
     *,
     model_def: nn.Module,
-    input_spec: Sequence[Union[Tuple[Tuple[int, ...], jnp.dtype],
-                               Tuple[int, ...], None]],
+    input_spec: Sequence[
+        Union[Tuple[Tuple[int, ...], jnp.dtype], Tuple[int, ...], None]
+    ],
     config: ml_collections.ConfigDict,
     rngs: Union[jnp.ndarray, Mapping[str, jnp.ndarray]],
+    train: Optional[bool] = False,
+    **model_kwargs,
 ) -> Tuple[PyTree, PyTree, int, Optional[float]]:
   """Initializes parameters and model state.
 
@@ -91,17 +95,23 @@ def initialize_model(
       dtype of the inputs. If unspecified the dtype is float32.
     config: Configurations of the initialization.
     rngs: Jax rng keys.
+    train: If the scenic model should be initialized in the train mode.
+    **model_kwargs: Kwargs passed to flax model initialization.
 
   Returns:
-    Initial params, Init model_state, and number of trainable_params.
+    Initial params, Init model_state, number of trainable_params, and gflops.
   """
-  batch_size = (config.batch_size //
-                jax.device_count()) if config.get('batch_size') else None
+  batch_size = (
+      (config.batch_size // jax.device_count())
+      if config.get('batch_size')
+      else None
+  )
   dummy_input = []
   for spec in input_spec:
     if spec is not None:
       in_st = debug_utils.input_spec_to_jax_shape_dtype_struct(
-          spec, batch_size=batch_size)
+          spec, batch_size=batch_size
+      )
       dummy_input.append(jnp.zeros(in_st.shape, in_st.dtype))
     else:
       dummy_input.append(None)
@@ -112,15 +122,17 @@ def initialize_model(
   @functools.partial(jax.jit, backend='cpu')
   def _initialize_model(rngs):
     """Initialization function to be jitted."""
-    init_model_state, init_params = model_def.init(
-        rngs, *dummy_input, train=False, debug=False).pop('params')
+    init_model_state, init_params = pop(model_def.init(
+        rngs, *dummy_input, train=train, debug=False, **model_kwargs
+    ), 'params')
     # Set bias in the head to low value, such that loss is small initially.
     if config.get('init_head_bias', None) is not None:
       init_params = flax.core.unfreeze(init_params)
       init_params['output_projection'] = optimizers.tree_map_with_names(
           lambda p: jnp.full_like(p, config.init_head_bias),
           init_params['output_projection'],
-          match_name_fn=lambda name: 'bias' in name)
+          match_name_fn=lambda name: 'bias' in name,
+      )
       init_params = flax.core.freeze(init_params)
     return init_params, init_model_state
 
@@ -135,14 +147,22 @@ def initialize_model(
 
   # Count gflops:
   count_flops = config.get(
-      'count_flops', ml_collections.ConfigDict({'count_flops': True}))
+      'count_flops', ml_collections.ConfigDict({'count_flops': True})
+  )
   if count_flops:
     variables = {'params': init_params, **init_model_state}
     flops = debug_utils.compute_flops(
         flax_model_apply_fn=functools.partial(
-            model_def.apply, variables, train=False, debug=False, rngs=rngs),
+            model_def.apply,
+            variables,
+            train=False,
+            debug=False,
+            rngs=rngs,
+            **model_kwargs,
+        ),
         input_spec=count_flops.get('input_spec', input_spec),
-        fuse_multiply_add=count_flops.get('fuse_multiply_add', True))
+        fuse_multiply_add=count_flops.get('fuse_multiply_add', True),
+    )
     gflops = flops / (10**9)
   else:
     gflops = None
@@ -156,6 +176,7 @@ def initialize_model_with_pytree(
     input_spec: PyTree,
     config: ml_collections.ConfigDict,
     rngs: Union[jnp.ndarray, Mapping[str, jnp.ndarray]],
+    **model_kwargs,
 ) -> Tuple[PyTree, PyTree, int, Optional[float]]:
   """Initializes parameters and model state with a pytree input_spec.
 
@@ -171,9 +192,10 @@ def initialize_model_with_pytree(
       shape and dtype of the inputs. If unspecified the dtype is float32.
     config: Configurations of the initialization.
     rngs: Jax rng keys.
+    **model_kwargs: Kwargs passed to flax model initialization.
 
   Returns:
-    Initial params, Init model_state, and number of trainable_params.
+    Initial params, Init model_state, number of trainable_params, and gflops.
   """
   batch_size = (config.batch_size //
                 jax.device_count()) if config.get('batch_size') else None
@@ -210,11 +232,13 @@ def initialize_model_with_pytree(
     # If dummy_input is a dict, we feed inputs as keyword arguments, otherwise
     # feed as position arguments.
     if isinstance(dummy_input, dict):
-      init_model_state, init_params = model_def.init(
-          rngs, **dummy_input, train=False, debug=False).pop('params')
+      init_model_state, init_params = pop(model_def.init(
+          rngs, **dummy_input, train=False, debug=False, **model_kwargs
+      ), 'params')
     else:
-      init_model_state, init_params = model_def.init(
-          rngs, *dummy_input, train=False, debug=False).pop('params')
+      init_model_state, init_params = pop(model_def.init(
+          rngs, *dummy_input, train=False, debug=False, **model_kwargs
+      ), 'params')
     # Set bias in the head to low value, such that loss is small initially.
     if config.get('init_head_bias', None) is not None:
       init_params = flax.core.unfreeze(init_params)
@@ -241,9 +265,16 @@ def initialize_model_with_pytree(
     variables = {'params': init_params, **init_model_state}
     flops = debug_utils.compute_flops_with_pytree(
         flax_model_apply_fn=functools.partial(
-            model_def.apply, variables, train=False, debug=False, rngs=rngs),
+            model_def.apply,
+            variables,
+            train=False,
+            debug=False,
+            rngs=rngs,
+            **model_kwargs,
+        ),
         input_spec=count_flops.get('input_spec', input_spec),
-        fuse_multiply_add=count_flops.get('fuse_multiply_add', True))
+        fuse_multiply_add=count_flops.get('fuse_multiply_add', True),
+    )
     gflops = flops / (10**9)
   else:
     gflops = None
@@ -377,8 +408,8 @@ def initialize_multitask_model(
   @functools.partial(jax.jit, backend='cpu')
   def _initialize_model(rngs):
     """Initialization function to be jitted."""
-    init_model_state, init_params = nn.init(
-        fn=init_fn, module=model_def)(rngs).pop('params')
+    init_model_state, init_params = pop(nn.init(
+        fn=init_fn, module=model_def)(rngs), 'params')
     # Set bias in the head to low value, such that loss is small initially.
     if (config.get('init_head_bias', None) is not None and
         'output_projection' in init_params):
@@ -1115,7 +1146,7 @@ def handle_checkpointing(
     unrep_train_state = jax_utils.unreplicate(train_state)
     metadata = unrep_train_state.metadata
     metadata['chrono'] = chrono.save()
-    unrep_train_state.replace(metadata=metadata)
+    unrep_train_state = unrep_train_state.replace(metadata=metadata)
     save_checkpoint(
         workdir,
         unrep_train_state,

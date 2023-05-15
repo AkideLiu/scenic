@@ -16,6 +16,13 @@
     > classifications. This includes [AdvProp](https://arxiv.org/abs/1911.09665)
     > and (Pyramid Adversarial Training Improves ViT Performance)[https://arxiv.org/abs/2111.15121].
 
+*   [AVATAR](avatar)
+
+    > [AVATAR](https://gabeur.github.io/avatar-visspeech) is a
+    > sequence-to-sequence AudioVisual ASR TrAnsformeR which is
+    > trained end-to-end from spectrograms and full-frame RGB for the task of
+    > audiovisual speech recognition (AV-ASR).
+
 *   [ViViT](vivit)
 
     > ViViT is a family of pure-transformer based models for video
@@ -99,6 +106,17 @@
     > parameter-efficient model that performs as well or better than models
     > trained on single modalities or tasks.
     > Details can be found in the [paper](https://arxiv.org/abs/2111.12993).
+
+*   [T5](t5)
+
+    > Wrappers of T5 models in [t5x](https://github.com/google-research/t5x).
+
+*   [Vid2Seq](vid2seq)
+
+    > Vid2Seq is a single-stage dense video captioning model, pre-trained on
+    > unlabelled narrated videos.
+    > Details can be found in the [paper](https://arxiv.org/abs/2302.14115).
+
 
 
 <a name="projects"></a>

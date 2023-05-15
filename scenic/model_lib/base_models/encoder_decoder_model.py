@@ -1,4 +1,4 @@
-# Copyright 2022 The Scenic Authors.
+# Copyright 2023 The Scenic Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ def encoder_decoder_metrics_function(
   evaluated_metrics = {}
   for key, val in metrics.items():
     evaluated_metrics[key] = model_utils.psum_metric_normalizer(  # pytype: disable=wrong-arg-types  # jax-ndarray
-        (val[0](logits, one_hot_targets, weights), val[1](
+        (val[0](logits, one_hot_targets, weights), val[1](  # pytype: disable=wrong-arg-types  # jax-types
             logits, one_hot_targets, weights)),
         axis_name=axis_name)
     if key == 'loss':
@@ -120,7 +120,7 @@ def encoder_decoder_metrics_function(
       evaluated_metrics['perplexity'] = (jnp.clip(
           jnp.exp(evaluated_metrics['loss'][0] / evaluated_metrics['loss'][1]),
           a_max=_MAX_PERPLEXITY), 1)
-  return evaluated_metrics
+  return evaluated_metrics  # pytype: disable=bad-return-type  # jax-types
 
 
 class EncoderDecoderModel(base_model.BaseModel):

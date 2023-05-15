@@ -1,4 +1,4 @@
-# Copyright 2022 The Scenic Authors.
+# Copyright 2023 The Scenic Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -388,6 +388,8 @@ def inspect_params(*,
         is_shape_mismatch = True
         logging.warning('Key: %s. Expected shape: %s. Restored shape: %s', key,
                         expected_flat[key].shape, restored_flat[key].shape)
+      else:
+        logging.info('Key found with matching shape: %s', key)
 
   # Adds back empty dict explicitly, to support layers without weights.
   # Context: FLAX ignores empty dict during serialization.

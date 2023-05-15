@@ -1,4 +1,4 @@
-# Copyright 2022 The Scenic Authors.
+# Copyright 2023 The Scenic Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -296,6 +296,38 @@ def aggregate_gradients_pmean(
 # A dummy object to allow for foo.bar access syntax, see
 # https://stackoverflow.com/a/19476841/2366315
 optax.scenic = type('', (), {})()
+
+
+def scale_by_adafactor(min_dim_size_to_factor=32,
+                       decay_rate=0.8, decay_offset=0,
+                       beta2_cap=0.999,
+                       clipping_threshold=None,
+                       momentum=0.9, dtype_momentum=jnp.bfloat16,
+                       eps=1e-30):
+  """The BigVision variant of Adafactor optimizer."""
+
+  def _decay_rate_pow(i, exponent):
+    """Second-order moment decay schedule."""
+    t = jnp.array(i, jnp.float32) + 1.0
+    return jnp.minimum(beta2_cap, 1.0 - t**(-exponent))
+
+  scale_by_rms = optax.scale_by_factored_rms(
+      factored=True,
+      decay_rate=decay_rate,
+      step_offset=decay_offset,
+      min_dim_size_to_factor=min_dim_size_to_factor,
+      epsilon=eps,
+      decay_rate_fn=_decay_rate_pow)
+
+  clip = (optax.clip_by_block_rms(clipping_threshold) if clipping_threshold
+          else optax.identity())
+
+  mom = (optax.ema(momentum, debias=False, accumulator_dtype=dtype_momentum)
+         if momentum else optax.identity())
+
+  return optax.chain(scale_by_rms, clip, mom)
+
+optax.scenic.scale_by_adafactor = scale_by_adafactor  # pytype: disable=module-attr
 
 
 def momentum_hp(momentum=0.9, dtype=jnp.bfloat16, nesterov=False):

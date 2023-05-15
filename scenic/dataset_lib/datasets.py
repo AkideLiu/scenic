@@ -1,4 +1,4 @@
-# Copyright 2022 The Scenic Authors.
+# Copyright 2023 The Scenic Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,6 +50,8 @@ _IMPORT_TABLE = {
         'scenic.dataset_lib.svhn_dataset',
     'video_tfrecord_dataset':
         'scenic.projects.vivit.data.video_tfrecord_dataset',
+    'av_asr_tfrecord_dataset':
+        'scenic.projects.avatar.datasets.av_asr_tfrecord_dataset',
     'bit':
         'scenic.dataset_lib.big_transfer.bit',
     'bert_wikibooks':

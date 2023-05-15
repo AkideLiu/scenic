@@ -1,4 +1,4 @@
-# Copyright 2022 The Scenic Authors.
+# Copyright 2023 The Scenic Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ Conventions:
 - Prefer `use_bias` over `bias`.
 """
 import functools
-from typing import Callable, Iterable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
 import flax.linen as nn
 import jax
@@ -33,7 +33,7 @@ from scenic.model_lib.layers import nn_layers
 
 # TODO(mrit): Upstream this to jax.nn.initializers
 # Inputs are PRNGKey, input shape and dtype.
-Initializer = Callable[[jnp.ndarray, Iterable[int], jnp.dtype], jnp.ndarray]
+Initializer = Callable[[jnp.ndarray, Sequence[int], jnp.dtype], jnp.ndarray]
 Shape = Sequence[int]
 
 

@@ -102,9 +102,9 @@ def bow_classification_metrics_function(
   evaluated_metrics = {}
   for key, val in metrics.items():
     evaluated_metrics[key] = model_utils.psum_metric_normalizer(  # pytype: disable=wrong-arg-types  # jax-ndarray
-        (val[0](logits, multihot_target, weights),
-         val[1](logits, multihot_target, weights)))
-  return evaluated_metrics
+        (val[0](logits, multihot_target, weights),  # pytype: disable=wrong-arg-types  # jax-types
+         val[1](logits, multihot_target, weights)))  # pytype: disable=wrong-arg-types  # jax-types
+  return evaluated_metrics  # pytype: disable=bad-return-type  # jax-types
 
 
 def multihead_classification_metrics_function(
@@ -325,7 +325,7 @@ class PolyVitBaseModel(base_model.BaseModel):
         polyvit_metrics_function, dataset_meta_data=self.dataset_meta_data,
         class_splits=class_splits, split_names=split_names)
 
-  def loss_function(self,
+  def loss_function(self,  # pytype: disable=signature-mismatch  # overriding-parameter-count-checks
                     logits: jnp.ndarray,
                     batch: base_model.Batch,
                     dataset_name: str,
