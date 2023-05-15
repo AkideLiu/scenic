@@ -31,7 +31,7 @@ def get_config():
   config.trainer_name = 'segmentation_trainer'
 
   # Optimizer.
-  config.batch_size = 32
+  config.batch_size = 4
   config.num_training_epochs = 400
   config.optimizer = 'adam'
   config.optimizer_configs = ml_collections.ConfigDict()
@@ -64,9 +64,9 @@ def get_config():
 
   # Logging.
   config.write_summary = True
-  config.xprof = True  # Profile using xprof.
+  config.xprof = False  # Profile using xprof.
   config.checkpoint = True  # Do checkpointing.
-  config.debug_train = False  # Debug mode during training.
+  config.debug_train = True  # Debug mode during training.
   config.debug_eval = False  # Debug mode during eval.
   return config
 

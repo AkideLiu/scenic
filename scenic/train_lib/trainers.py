@@ -16,10 +16,12 @@
 
 from scenic.train_lib import classification_trainer
 from scenic.train_lib.transfer import transfer_trainer
+from scenic.train_lib import segmentation_trainer
 
 ALL_TRAINERS = {
     'classification_trainer': classification_trainer.train,
     'transfer_trainer': transfer_trainer.train,
+    'segmentation_trainer': segmentation_trainer.train,
 }
 
 

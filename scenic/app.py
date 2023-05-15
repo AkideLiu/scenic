@@ -34,6 +34,7 @@ Usage in your main.py:
 """
 
 import functools
+import os
 
 from absl import app
 from absl import flags
@@ -60,42 +61,43 @@ flags.mark_flags_as_required(['config', 'workdir'])
 
 
 def run(main):
-  # Provide access to --jax_backend_target and --jax_xla_backend flags.
-  jax.config.config_with_absl()
-  app.run(functools.partial(_run_main, main=main))
+    # Provide access to --jax_backend_target and --jax_xla_backend flags.
+    jax.config.config_with_absl()
+    app.run(functools.partial(_run_main, main=main))
 
 
 def _run_main(argv, *, main):
-  """Runs the `main` method after some initial setup."""
-  del argv
-  # Hide any GPUs form TensorFlow. Otherwise, TF might reserve memory and make
-  # it unavailable to JAX.
-  tf.config.experimental.set_visible_devices([], 'GPU')
+    """Runs the `main` method after some initial setup."""
+    del argv
+    # Hide any GPUs form TensorFlow. Otherwise, TF might reserve memory and make
+    # it unavailable to JAX.
+    tf.config.experimental.set_visible_devices([], 'GPU')
 
-  # Enable wrapping of all module calls in a named_call for easier profiling:
-  nn.enable_named_call()
+    # Enable wrapping of all module calls in a named_call for easier profiling:
+    nn.enable_named_call()
 
-  if FLAGS.jax_backend_target:
-    logging.info('Using JAX backend target %s', FLAGS.jax_backend_target)
-    jax_xla_backend = ('None' if FLAGS.jax_xla_backend is None else
-                       FLAGS.jax_xla_backend)
-    logging.info('Using JAX XLA backend %s', jax_xla_backend)
+    if FLAGS.jax_backend_target:
+        logging.info('Using JAX backend target %s', FLAGS.jax_backend_target)
+        jax_xla_backend = ('None' if FLAGS.jax_xla_backend is None else
+                           FLAGS.jax_xla_backend)
+        logging.info('Using JAX XLA backend %s', jax_xla_backend)
 
-  logging.info('JAX host: %d / %d', jax.process_index(), jax.process_count())
-  logging.info('JAX devices: %r', jax.devices())
+    logging.info('JAX host: %d / %d', jax.process_index(), jax.process_count())
+    logging.info('JAX devices: %r', jax.devices())
 
-  # Add a note so that we can tell which task is which JAX host.
-  # (task 0 is not guaranteed to be the host 0)
-  platform.work_unit().set_task_status(
-      f'host_id: {jax.process_index()}, host_count: {jax.process_count()}')
-  if jax.process_index() == 0:
-    platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,
-                                         FLAGS.workdir, 'Workdir')
+    # Add a note so that we can tell which task is which JAX host.
+    # (task 0 is not guaranteed to be the host 0)
+    platform.work_unit().set_task_status(
+        f'host_id: {jax.process_index()}, host_count: {jax.process_count()}')
+    if jax.process_index() == 0:
+        platform.work_unit().create_artifact(platform.ArtifactType.DIRECTORY,
+                                             FLAGS.workdir, 'Workdir')
 
-  rng = jax.random.PRNGKey(FLAGS.config.rng_seed)
-  logging.info('RNG: %s', rng)
+    # print(os.environ)
+    rng = jax.random.PRNGKey(FLAGS.config.rng_seed)
+    logging.info('RNG: %s', rng)
 
-  writer = metric_writers.create_default_writer(
-      FLAGS.workdir, just_logging=jax.process_index() > 0, asynchronous=True)
+    writer = metric_writers.create_default_writer(
+        FLAGS.workdir, just_logging=jax.process_index() > 0, asynchronous=True)
 
-  main(rng=rng, config=FLAGS.config, workdir=FLAGS.workdir, writer=writer)
+    main(rng=rng, config=FLAGS.config, workdir=FLAGS.workdir, writer=writer)
