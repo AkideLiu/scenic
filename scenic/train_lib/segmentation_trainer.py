@@ -499,6 +499,8 @@ def train(
                 # batch statistic when using batch norm).
                 train_state = train_utils.sync_model_state_across_replicas(train_state)
                 eval_summary = evaluate(train_state, step)
+                
+            chrono.resume()
 
         if ((step % checkpoint_steps == 1 and step > 1) or
             (step == total_steps)) and config.checkpoint:
